@@ -1,0 +1,5 @@
+call_xy.R --m_prefix Gambusia_male --f_prefix Gambusia_female --out_prefix Gambusia_hcut8 --hcut 0.8 --hetgam_freq_cut 0.3 --homgam_freq_cut 0.0
+call_xy.R --m_prefix latipinna_male --f_prefix latipinna_female --out_prefix latipinna_hcut8 --hcut 0.8 --hetgam_freq_cut 0.3 --homgam_freq_cut 0.0
+call_xy.R --m_prefix picta_male --f_prefix picta_female --out_prefix picta_hcut8 --hcut 0.8 --hetgam_freq_cut 0.3 --homgam_freq_cut 0.0
+call_xy.R --m_prefix wingei_male --f_prefix wingei_female --out_prefix wingei_hcut8 --hcut 0.8 --hetgam_freq_cut 0.3 --homgam_freq_cut 0.0
+call_xy.R --m_prefix reticulata_male --f_prefix reticulata_female --out_prefix reticulata_hcut8 --hcut 0.8 --hetgam_freq_cut 0.3 --homgam_freq_cut 0.0

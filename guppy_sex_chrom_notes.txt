@@ -1,0 +1,1132 @@
+#guppy_sex_chrom_notes.txt
+#notes on downloading and processing raw data from Darolti et al. 2019 (Extreme heterogeneity in sex chromosome differentiation and dosage compensation in livebearers)
+#SRA accession = PRJNA353986
+#28 DNA and 15 RNA
+
+################################
+###### DOWNLOAD RAW READS ######
+################################
+
+#DOWNLOAD FROM RUNLIST AND DUMP
+
+>download
+while read srr
+do echo "$PREFETCH $srr --max-size 1000G" >> download
+done <runList.txt
+
+
+#dump the fastq files where you want
+#first navigate to the directory you want the placed
+>dump
+while read srr
+do echo "$FQDUMP --split-files ${PREFETCH_PATH}/sra/${srr}.sra &">>dump
+done <runList.txt
+
+
+#######################################
+############## RUN FASTQ ##############
+#######################################
+
+#SET UP DIRECTORY WITH SUBSETS FOR QUICK TESTS
+
+NTEST=400000
+mkdir testRun
+for file in *.fastq
+do head -n $NTEST $file > testRun/${file}
+done
+
+
+#Run FastQC on subsets
+
+module load fastqc
+mkdir Fastqc_Restults_raw/
+> runFQC
+for file in *.fastq
+do echo "fastqc -o Fastqc_Restults_raw/ -f fastq $file" >> runFQC
+done
+
+launcher_creator.py -n runFQC -j runFQC -q normal -N 1 -w 48 -a $allo -e $email -t 05:00:00
+sbatch runFQC.slurm
+
+
+#RNA READS:
+30 total files:
+	15 samples x 2 paired end reads per
+	each are 100 bp reads
+
+#DNA READS:
+50 total files:
+	25 samples x 2 paired end fastqs per
+	each are 100 bp reads
+	quality looks pretty bad on a lot of R2 reads
+
+	
+	
+######################################
+############## TRIMMING ##############
+######################################
+
+#FOR PAIRED END READS
+
+>trimpe
+for file in SRR50347*_2.fastq
+do echo "cutadapt \
+-a GATCGGAAGAGCA \
+-A GATCGGAAGAGCA \
+-a AGATCGGAAGAGC \
+-A AGATCGGAAGAGC \
+--minimum-length 20 \
+-q 20 \
+-o ${file/_2.fastq/}_1.trim \
+-p ${file/_2.fastq/}_2.trim \
+${file/_2.fastq/}_1.fastq \
+$file > ${file/_2.fastq/}_trimlog.txt" >> trimpe
+done
+	
+launcher_creator.py -n trimpe -j trimpe -a $allo -e $email -q normal -t 12:00:00 -N 1 -w 43
+sbatch trimpe.slurm
+
+
+#######################################
+##### CONCATENATING SAMPLE FASTQS #####
+#######################################
+#many of the samples in the dataset have multiple runs
+#will concatenate these before mapping
+#use /metadata/overview_data.R to output catting commands  
+#(uses Table S1 from manuscript and SraRunTables to work out catting)
+#commands saved as: metadata/cat_guppy_trim_files.txt
+
+launcher_creator.py -n cat_guppy_trim_files.txt -j cat_guppy_trim_files.txt -q development -N 2 -w 48 -a $allok -t 02:00:00
+sbatch cat_guppy_trim_files.txt.slurm
+
+
+#----- CHECKING RESULTS -----#
+#after running the concatenation commands
+#double-checked these against outputs at top of metadata/overview_data.R
+ls *catted.fq | wc -l
+	#182 total files = 
+
+ll *RNA-Seq*.fq | wc -l
+	#78 RNA-seq files = 39 RNA samples x 2 concatenated PE files per
+	
+ll *WGS*.fq | wc -l
+	#104 fastq files = 52 DNA samples x 2 concatenated PE files per
+
+#for all but reticulata:
+ls Pwin_T_*RNA*.fq | wc -l
+ls P.win*WGS*.fq | wc -l
+ls P.lat*RNA*.fq | wc -l
+ls P.lat*WGS*.fq | wc -l
+ls G.hol*RNA*.fq | wc -l
+ls G.hol*WGS*.fq | wc -l
+ls P.pic.*RNA*.fq | wc -l
+ls P.pic.*WGS*.fq | wc -l
+
+#reticulata
+ls Male*RNA*.fq | wc -l
+ls Female*RNA*.fq | wc -l
+ls Male*WGS*.fq | wc -l
+ls Female*WGS*.fq | wc -l
+
+#all matched expectations from metadata/overview_data.R
+
+
+
+#####################################
+######### REFERENCE GENOMES #########
+#####################################
+#digging around, found Xiphophorus Genetic Stock Center here: https://www.xiphophorus.txstate.edu/genomebrowser/IGV-Genome-Browser.html
+#This had a link to the data repository here: https://viewer.xgsc.txstate.edu/data/
+#These don't seem as new as the ones on NCBI though
+
+
+#X. maculats is on ensemble
+wget ftp://ftp.ensembl.org/pub/release-99/gff3/xiphophorus_maculatus/Xiphophorus_maculatus.X_maculatus-5.0-male.99.gff3.gz
+wget ftp://ftp.ensembl.org/pub/release-99/fasta/xiphophorus_maculatus/dna/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa.gz
+
+
+#xiphophorus hellerii from NCBI
+wget ftp://ftp.ensembl.org/pub/release-99/gff3/xiphophorus_maculatus/Xiphophorus_maculatus.X_maculatus-5.0-male.99.gff3.gz
+wget ftp://ftp.ensembl.org/pub/release-99/fasta/xiphophorus_maculatus/dna/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa.gz
+
+#for faster mapping, make a chromosomes-only version of X. hellerii
+
+
+
+
+
+#################################
+############ MAPPING ############
+#################################
+#Here I've noticed threading bowtie by around 4 - 8 works well so we'll go in middle with -p 6
+
+
+#---- FOR PAIRED END READS ----#
+
+
+export REFERENCE_GENOME="/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa" #maculatus
+export REFERENCE_GENOME="/work/02260/grovesd/stampede2/Xhellerii_chrsOnly_reference/Xiphophorus_hellerii_v4.1_chrsOnly.fasta"       #hellerii
+
+#for DNA
+module load bowtie
+module load samtools
+>mappe
+for file in *_2_WGS_catted.trim
+do runID=${file/_2_WGS_catted.trim/}
+echo "bowtie2 -x $REFERENCE_GENOME -1 ${runID}_1_WGS_catted.fq -2 ${runID}_2_WGS_catted.fq --local -p 4 -S ${runID}.sam" >> mappe
+done
+
+
+#for RNA
+module load bowtie
+module load samtools
+>mappe
+for file in *_2_RNA-Seq_catted.fq
+do runID=${file/_2_RNA-Seq_catted.fq/}
+echo "bowtie2 -x $REFERENCE_GENOME -1 ${runID}_1_RNA-Seq_catted.fq -2 ${runID}_2_RNA-Seq_catted.fq -p 12 -S ${runID}.sam" >> mappe
+done
+
+
+launcher_creator.py -n mapDNArun2 -j mappe -q normal -N 13 -w 3 -a $allo -t 24:00:00 -e $email
+
+
+##################################################
+############ SPLIT BAMS BY CHROMOSOME ############
+##################################################
+
+#first sort the bam files
+module load samtools
+>doSort
+for file in *.sam
+do echo "samtools sort -O bam -o ${file/.sam/}_sorted.bam $file && samtools index ${file/.sam/}_sorted.bam" >> doSort
+done
+
+#get chromosome list
+REFERENCE_GENOME=/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa
+export REFERENCE_GENOME="/work/02260/grovesd/stampede2/Xhellerii_chrsOnly_reference/Xiphophorus_hellerii_v4.1_chrsOnly.fasta"       #hellerii
+
+
+grep "^>" $REFERENCE_GENOME | sed 's/>//' | cut -f 1 -d " " | head -n 24 > chromList.txt
+
+
+#set up subsetting commands
+module load samtools
+>sepChroms
+for file in *.bam
+do while read p
+do echo "samtools view -b -h -o ${file/.bam/_chr${p}.bam} $file $p && samtools index ${file/.bam/_chr${p}.bam}"
+done<chromList.txt >> sepChroms
+done
+
+launcher_creator.py -n sepChroms -j sepChroms -q normal -N 4 -w 64 -a $allo -e $email -t 02:00:00
+
+
+###########################################
+############# DEDUPLICATION ###############
+###########################################
+
+module load samtools
+>removeDups
+for file in *.sam
+do runID=${file/.sam/}
+ echo "samtools sort -O bam -o ${runID}_sorted.bam $file &&\
+ java -Xms4g -jar /work/02260/grovesd/lonestar/picard/picard-tools-1.119/MarkDuplicates.jar\
+ INPUT=${runID}_sorted.bam\
+ OUTPUT=${runID}_dupsRemoved.bam\
+ METRICS_FILE=${runID}_dupMetrics.txt\
+ REMOVE_DUPLICATES=true &&\
+ samtools index ${runID}_dupsRemoved.bam" >> removeDups
+ done
+ 
+launcher_creator.py -n removeDups -j removeDups -t 12:00:00 -q normal -a $allok -e $email -N 24 -w 2
+
+
+#removal metrics
+>dupRemovalMetrics.tsv
+for file in *dupMetrics.txt
+do pct=$(sed '8q;d' $file | cut -f 8)
+echo -e "$file\t$pct" |\
+ awk '{split($1, a, "_dupMetrics.txt")
+ print a[1]"\t"$2"\tdupRemProp"}' >> dupRemovalMetrics.tsv
+done
+
+
+
+#------ OR FROM SORTED CHROMOSOME BAMS:
+module load samtools
+>removeDups
+for file in *chr*.bam
+do runID=${file/.bam/}
+ echo "\
+ java -Xms4g -jar /work/02260/grovesd/lonestar/picard/picard-tools-1.119/MarkDuplicates.jar\
+ INPUT=${file}\
+ OUTPUT=${runID}_dupsRemoved.bam\
+ METRICS_FILE=${runID}_dupMetrics.txt\
+ REMOVE_DUPLICATES=true &&\
+ samtools index ${runID}_dupsRemoved.bam" >> removeDups
+ done
+ 
+ 
+#######################################
+######## FOLD COVERAGE FROM DNA #######
+#######################################
+#starting with chromosome bams with duplicates removed
+#(assemble all from each species in the same directory)
+
+
+#get chromosomes lengths
+REFERENCE_GENOME=/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa
+REFERENCE_GENOME="/work/02260/grovesd/stampede2/Xhellerii_chrsOnly_reference/Xiphophorus_hellerii_v4.1_chrsOnly.fasta"   
+fasta_sequence_characters.py -fa $REFERENCE_GENOME | head -n 24 > chrLengths.txt
+cut -f 1 chrLengths.txt > chrs.txt
+
+#make windows
+WINDOW_SIZE=10000
+module load bedtools
+bedtools makewindows -g chrLengths.txt -w $WINDOW_SIZE | awk 'BEGIN{OFS="\t"}{print $0,$1"-"$2"-"$3}' > windowBoundaries.bed
+
+#split into single files
+while read chr
+do grep -w "^${chr}" windowBoundaries.bed > chr${chr}_windows.bed
+done < chrs.txt
+
+#split even more
+for file in chr*windows.bed
+do chr=${file/_windows.bed/}; echo "split --lines 80 --additional-suffix _${chr}_sub.bed $file"
+done
+
+
+
+#set up multicov commands for each of them split bed files
+>runMulticov
+while read CHR
+do for file in *_chr${CHR}_sub.bed
+do echo "bedtools multicov -bams *_chr${CHR}_dupsRemoved.bam -bed $file > ${file/.bed/}.tsv0" >> runMulticov
+done
+done < chrs.txt
+
+launcher_creator.py -n redoMulticovInd -j runMulticov -q development -N 2 -w 64 -a $allo -e $email -t 02:00:00
+
+
+#assemble results
+samples=$(ls *_chr7_DNA.bam | sed 's/_chr7_DNA.bam//' | tr "\n" "\t") #for maculatus
+samples=$(ls *_chrNC_045695.1.bam | sed 's/_chrNC_045695.1.bam//' | \
+sed 's/G.hol./Gambusia/g' | \
+sed 's/P.lat./latipinna/g' | \
+sed 's/P.pic./picta/g' | \
+sed 's/P.win./wingei/g' | \
+tr "\n" "\t") #for hellerii
+echo -e "chr\tstart\tend\tname\t$samples" > all_multicov_results.tsv
+cat *.tsv0 >> all_multicov_results.tsv
+
+
+
+################################################
+###### GET GENE COUNTS WITH FEATURECOUNTS ######
+################################################
+
+#Choose the GFF
+
+MY_GFF="/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.99.gff3"; GENE_ID="gene_id"
+
+#run featurecounts
+echo "featureCounts -a $MY_GFF -p -t gene -g $GENE_ID -o feature_counts_out_1of2.txt -T 48 --primary *_T_*dupsRemoved.bam
+featureCounts -a $MY_GFF -p -t gene -g $GENE_ID -o feature_counts_out_2of2.txt -T 48 --primary SRR*[0-9]_dupsRemoved.bam" > runFeatureCounts
+
+
+#OR RUN FOR SPLIT BAMS
+
+#get chrs.txt
+fasta_sequence_characters.py -fa $REFERENCE_GENOME | head -n 24 > chrLengths.txt
+cut -f 1 chrLengths.txt > chrs.txt
+
+#make gff for each
+while read CHR
+do echo "${CHR}..."
+grep -w "^$CHR" $MY_GFF > chr${CHR}.gff
+done < chrs.txt
+
+#run featurecounts for each
+>runFeatureCounts
+while read chr
+do echo "featureCounts -a chr${chr}.gff -p -t gene -g $GENE_ID -o chr${chr}_feature_counts_out.tsv -T 12 --primary *_chr${chr}_*.bam" >>runFeatureCounts
+done < chrs.txt
+
+
+
+#assemble the results
+>all_feature_counts.tsv
+while read CHR
+do fc_file="chr{CHR}_feature_counts_out.tsv"
+
+
+
+
+
+#get gene coordinates
+awk 'BEGIN {OFS="\t"} 
+{split($9, a, "ID=gene:")
+ split(a[2], b, ";")
+ if ($3=="gene") print $1,$4,$5,b[1]}' Xiphophorus_maculatus.X_maculatus-5.0-male.99.gff3 > geneCoords.tsv
+
+#send to 
+
+ 
+
+
+#######################################
+####### PIPELINE COUNTS RESULTS #######
+#######################################
+
+#GET RAW READ COUNT
+>getRawCounts
+for file in reticulata*.fq
+do echo "wc -l $file > ${file}.wc.txt" >>getRawCounts
+done
+
+#assemble 
+cat *RNA-Seq_catted.fq.wc.txt > all_RNA_raw_counts.tsv
+
+
+#---- MAPPED BEFORE DUP-REMOVAL
+
+#GET ALIGNMENT COUNTS PRE-DEDUP
+>getInitialAlignment
+for file in *sorted.bam
+do echo "samtools flagstat $file > ${file/_sorted.bam/}_prededup_flagstats.txt" >> getInitialAlignment
+done
+
+#format properly paired reads
+>prededup_properly_paired_count.tsv
+for file in *prededup_flagstats.txt
+do pp=$(grep "properly paired" $file); echo -e "$file\t$pp" |\
+ awk '{split($1, a, "_prededup_flagstats.txt")
+ split($7, b, "(")
+ print a[1]"\t"$2"\tpredupPropPaired"}' >> prededup_properly_paired_count.tsv
+ done
+ 
+ 
+#format properly paired efficiency
+>prededup_properly_paired_efficiency.tsv
+for file in *prededup_flagstats.txt
+do pp=$(grep "properly paired" $file); echo -e "$file\t$pp" |\
+ awk '{split($1, a, "_prededup_flagstats.txt")
+ split($7, b, "(")
+ print a[1]"\t"b[2]"\tpredupPropPairedEff"}' >>prededup_properly_paired_efficiency.tsv
+ done
+
+
+#---- MAPPED POST DUP REMOVAL
+>getDupRemAlignment
+for file in *dupsRemoved.bam
+do echo "samtools flagstat $file > ${file/.bam/}_post_dedup_flagstats.txt &" >> getDupRemAlignment
+done
+
+#format properly paired reads
+>dedup_properly_paired_count.tsv
+for file in *_dedup_flagstats.txt
+do pp=$(grep "properly paired" $file)
+ echo -e "$file\t$pp" |\
+ awk '{split($1, a, "_chr")
+ print a[1]"\t"$2"\tdedupPropPair"}' >> dedup_properly_paired_count.tsv
+done
+
+
+
+#format mapping efficiencies
+>dedup_mapping_eff.tsv
+for file in *_post_dedup_flagstats.txt
+do pp=$(grep "mapped" $file | head -n 1)
+echo -e "$file\t$pp" |\
+ awk '{split($1, a, "_")
+ split($6, b, "(")
+ print a[1]"\t"b[2]"\tdedupEff"}' >> dedup_mapping_eff.tsv
+done
+
+#COUNTED ON GENES
+total_gene_counts.R rnaseq_gene_counts.txt
+
+
+
+#################################################
+################## RUN MPILEUP ##################
+#################################################
+
+#get chrom list
+REFERENCE_GENOME=/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa
+REFERENCE_GENOME=/work/02260/grovesd/stampede2/Xhellerii_chrsOnly_reference/Xiphophorus_hellerii_v4.1_chrsOnly.fasta 
+
+
+#split the bams if you need to
+module load samtools
+>sepChroms
+for file in *_dupsRemoved.bam
+do while read p
+do echo "samtools view -b -h -o ${file/_dupsRemoved.bam/_chr${p}.bam} $file $p && samtools index ${file/_dupsRemoved.bam/_chr${p}.bam}"
+done<chromList.txt >> sepChroms
+done
+
+launcher_creator.py -n sepChroms -j sepChroms -q development -N 2 -w 24 -a $allo -e $email -t 02:00:00
+
+
+#set up bam lists for each chrom
+while read chr
+do ls *_chr${chr}.bam > chr${chr}_bamlist.txt
+done < chromList.txt
+
+#check
+wc -l *bamlist.txt
+
+
+#------------------ EXTRA SPLITTING OF BAMS ------------------#
+#this is necessary for DNA files to run fast enough (can skip for RNA and just parallelize by chr)
+#it takes too long to run with all species split only by chromosomes
+#subset the bam files further for more parallelization
+
+#get chromosomes lengths
+REFERENCE_GENOME=/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa
+REFERENCE_GENOME=/work/02260/grovesd/stampede2/Xhellerii_chrsOnly_reference/Xiphophorus_hellerii_v4.1_chrsOnly.fasta 
+fasta_sequence_characters.py -fa $REFERENCE_GENOME | head -n 24 > chromLengths.txt
+cut -f 1 chromLengths.txt > chrs.txt
+
+
+#subset the bams into chuncks
+N_CHUNKS=25
+guppy_subset_bams_by_chrom_size.py chromLengths.txt $N_CHUNKS subsetBams *.bam 
+
+wc -l subsetBams
+#12480 = 104 samples * 24 chroms * 10 subsets per chrom
+
+launcher_creator.py -n subsetBams -j subsetBams -q development -N 2 -w 64 -a $allo -e $email -t 02:00:00
+sbatch subsetBams.slurm
+
+
+#check you have all the split bam files
+ls *sub*.bam | wc -l
+
+
+#set up bam lists for each linkage group subset (assuming 4 subsets)
+for i in $(seq $N_CHUNKS)
+do while read chr
+do ls *_${chr}_sub${i}.bam > ${chr}_sub${i}_bamlist.txt
+done < chrs.txt
+done
+
+#check the bamlists
+wc -l *_bamlist.txt
+
+
+#----------------------------------------------------------#
+
+
+#build mpileup commands for each species-chromosome pair
+#outputting the results as an uncompressed VCF file so they can be concatenated
+REFERENCE_GENOME=/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa
+REFERENCE_GENOME=/work/02260/grovesd/stampede2/Xhellerii_chrsOnly_reference/Xiphophorus_hellerii_v4.1_chrsOnly.fasta 
+
+
+module load samtools
+>runmpile
+for file in *_bamlist.txt
+do echo "samtools mpileup -f $REFERENCE_GENOME -t DP,AD,ADF,ADR,SP -u -v -b $file > ${file/bamlist.txt/mpileupResults.vcf}" >> runmpile
+done
+
+launcher_creator.py -n actualAllTogether -j runmpile -q normal -N 25 -w 24 -a $allo -e $email -t 24:00:00
+
+#now call genotypes
+module load samtools
+>callQuality
+for file in *_mpileupResults.vcf
+do echo "bcftools call -vmO v -o ${file/_mpileupResults.vcf/_rawCalls.vcf} $file && \
+bcftools filter --exclude 'QUAL < 20' ${file/_mpileupResults.vcf/_rawCalls.vcf} | \
+bcftools view > ${file/_mpileupResults.vcf/_filt0.vcf}" >>callQuality
+done
+
+launcher_creator.py -n callQuality -j callQuality -q development -N 2 -w 64 -a $allo -e $email -t 02:00:00
+
+ls *filt0.vcf | wc -l
+
+
+#do all filtering steps at once:
+>filtAll
+for file in *filt0.vcf
+do filt1File=${file/filt0.vcf/filt1.vcf}
+singletonOut=${file/_filt0.vcf/}
+singletonFile=${singletonOut}_toRemove.tsv
+filt2File=${file/filt0.vcf/filt2.vcf}
+echo "vcftools --vcf $file --remove-indels --min-meanDP 3 --min-alleles 2 --max-alleles 2 --recode --recode-INFO-all -c > $filt1File && \
+vcftools --vcf $filt1File --singletons --out $singletonOut && \
+cat ${singletonOut}.singletons | awk '{print \$1\"\\t\"\$2}' > $singletonFile && \
+vcftools --vcf $filt1File --exclude-positions $singletonFile --recode -c > $filt2File" >>filtAll
+done
+
+launcher_creator.py -n filtAll -j filtAll -q development -N 2 -w 64 -a $allo -t 02:00:00
+
+
+#---- IF USED EXTRA SPLITTING OF BAMS ----#
+
+#fix the names
+>fixNames
+while read CHR
+do for i in $(seq $N_CHUNKS)
+do for file in ${CHR}_sub${i}_filt2.vcf
+do echo "echo ${file}..." >> fixNames
+echo sed '"'"s/_chr${CHR}_/_/g"'"' $file "|" sed '"'"s/_${CHR}_sub${i}.bam//g"'"' "> ${file/_filt2.vcf/}_nameFixed.vcf" >> fixNames
+done
+done
+done < chrs.txt
+
+#concatenate the sub vcfs
+module load samtools
+>catSubs
+while read CHR
+do echo "bcftools concat -o chr${CHR}_filt2.vcf ${CHR}_sub*_nameFixed.vcf" >>catSubs
+done < chrs.txt
+
+#sort the resulting vcfs
+module load samtools
+>doSort
+for file in chr*filt2.vcf
+do echo "bcftools sort -o ${file/_filt2.vcf/}_sorted.vcf $file" >> doSort
+done
+
+
+########################################################
+################ WINDOW DEPTH FROM VCFS ################
+########################################################
+#here double-check that using the VCF depths gives same results as multicov
+cd window_depth_fromVCF
+
+#copy over files and remove the # before CHROM for reading into R
+>grab_files
+for file in ../species_vcfs/chr*_all_*DNA.vcf
+do file_name=$(echo $file | awk '{split($1, a, "/"); print a[3]}')
+echo "sed 's/#CHROM/CHROM/' $file > ./${file_name}" >> grab_files
+done
+
+#run R script for window means
+>getWindowMeans
+for file in chr*_DNA.vcf
+do echo "mean_window_snp_covergae.R --vcf $file --o ${file/_DNA.vcf/}_vcf_window_depths.tsv" >>getWindowMeans
+done
+
+launcher_creator.py -n getWindowMeans -j getWindowMeans -q development -N 2 -w 4 -a $allo -t 02:00:00
+
+########################################################
+############### SPLIT BY SPECIES AND SEX ###############
+########################################################
+
+
+#expect to start here with the 24 filt2 vcfs
+
+#replace the junk in names
+>fixNames
+while read chr
+do toRM="_chr${chr}.bam"
+echo "sed -i.bak s/${toRM}//g chr${chr}_filt2.vcf" >> fixNames
+done < chrs.txt
+
+#use rna_vcf_sample_table.txt or something like it to build population tables
+VCF_SAMPLE_TABLE=rna_vcf_sample_table.txt
+VCF_SAMPLE_TABLE=dna_vcf_sample_table.txt
+VCF_SAMPLE_TABLE=both_dna_rna_vcf_samples.txt
+
+
+#Gambusia
+awk 'BEGIN {FS="\t"}; {if ($2=="M" && $3 == "Gambusia") print $0}' $VCF_SAMPLE_TABLE > male_Gambusia_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($2=="F" && $3 == "Gambusia") print $0}' $VCF_SAMPLE_TABLE > female_Gambusia_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($3 == "Gambusia") print $0}' $VCF_SAMPLE_TABLE > all_Gambusia_sub.txt
+
+#latipinna
+awk 'BEGIN {FS="\t"}; {if ($2=="M" && $3 == "latipinna") print $0}' $VCF_SAMPLE_TABLE > male_latipinna_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($2=="F" && $3 == "latipinna") print $0}' $VCF_SAMPLE_TABLE > female_latipinna_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($3 == "latipinna") print $0}' $VCF_SAMPLE_TABLE > all_latipinna_sub.txt
+
+#picta
+awk 'BEGIN {FS="\t"}; {if ($2=="M" && $3 == "picta") print $0}' $VCF_SAMPLE_TABLE > male_picta_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($2=="F" && $3 == "picta") print $0}' $VCF_SAMPLE_TABLE > female_picta_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($3 == "picta") print $0}' $VCF_SAMPLE_TABLE > all_picta_sub.txt
+
+#wingei
+awk 'BEGIN {FS="\t"}; {if ($2=="M" && $3 == "wingei") print $0}' $VCF_SAMPLE_TABLE > male_wingei_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($2=="F" && $3 == "wingei") print $0}' $VCF_SAMPLE_TABLE > female_wingei_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($3 == "wingei") print $0}' $VCF_SAMPLE_TABLE > all_wingei_sub.txt
+
+#reticulata
+awk 'BEGIN {FS="\t"}; {if ($2=="M" && $3 == "reticulata") print $0}' $VCF_SAMPLE_TABLE > male_reticulata_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($2=="F" && $3 == "reticulata") print $0}' $VCF_SAMPLE_TABLE > female_reticulata_sub.txt
+awk 'BEGIN {FS="\t"}; {if ($3 == "reticulata") print $0}' $VCF_SAMPLE_TABLE > all_reticulata_sub.txt
+
+#now make DNA and RNA subsets
+for file in *sub.txt
+do grep "_RNA" $file > ${file/_sub.txt/}_RNA_sub.txt
+grep "_DNA" $file > ${file/_sub.txt/}_DNA_sub.txt
+done
+
+
+#MAKE THE SUBSET VCFS
+
+>makeSubs
+for SUB in *_sub.txt
+do for VCF in *filt2.vcf
+do echo "vcftools --vcf $VCF --keep $SUB --recode -c > ${VCF/_filt2.vcf/}_${SUB/_sub.txt/}.vcf" >>makeSubs
+done
+done
+
+
+launcher_creator.py -n makeSubs -j makeSubs -q normal -N 4 -w 60 -a $allo -e $email -t 04:00:00
+sbatch makeSubs.slurm
+
+
+###################################################
+###### GET ALLELE FREQUENCIES FOR CALLING YW ######
+###################################################
+echo "Gambusia
+latipinna
+picta
+wingei
+reticulata" > species.txt
+
+#OPTIONALLY FILTER THE VCFS TO ONLY THOSE THAT COULD POSSIBLY BE Y OR W
+#here an example using only DNA vcfs
+mkdir callXY_prep
+
+
+#filter for only those that COULD be Y linked
+>filterMaf
+for file in *.vcf
+do echo "vcftools --vcf $file --maf 0.2 --max-missing 1.0 --recode --out ${file/.vcf/}_Yable" >> filterMaf
+done
+
+#then split out the sexes as above
+> splitSex
+while read spp
+do for file in *${spp}*_Yable.recode.vcf
+do echo "vcftools --vcf $file --keep male_${spp}_DNA_sub.txt --recode -c > male_${file}" >> splitSex
+echo "vcftools --vcf $file --keep female_${spp}_DNA_sub.txt --recode -c > female_${file}" >> splitSex
+done
+done < species.txt
+
+
+#now get the sex-specific frequencies and hwe
+>getFrqs
+for file in *male_*Yable.recode.vcf
+do echo "vcftools --vcf $file --freq --out ${file/.vcf/}" >> getFrqs
+echo "vcftools --vcf $file --hardy --out ${file/.vcf/}" >> getFrqs
+done
+
+launcher_creator.py -n getFrqs -j getFrqs -q development -N 1 -w 48 -a $allo -e $email -t 00:30:00
+sbatch getFrqs.slurm 
+
+
+
+#assemble the results for calling XY by allele frequencies
+
+while read spp
+do echo "${spp}..."
+cat female_chr*${spp}*.frq | grep -v "^CHR" > ${spp}_female_afs.tsv
+cat male_chr*${spp}*.frq | grep -v "^CHR" > ${spp}_male_afs.tsv
+cat female_chr*${spp}*.hwe | grep -v "^CHR" > ${spp}_female_hwe.tsv
+cat male_chr*${spp}*.hwe | grep -v "^CHR" > ${spp}_male_hwe.tsv
+done < species.txt
+
+
+#--------- COMPILE FULL GENOME VCFS 
+
+
+#also assemble full genome VCFs for each species
+>genomeify_vcfs
+while read SPP
+do echo "ls chr*_all_${SPP}.vcf | wc -l
+bcftools concat -o ${SPP}_genome.vcf chr*_all_${SPP}.vcf" >> genomeify_vcfs
+done < species.txt
+
+sh genomeify_vcfs
+
+#restrict these to only those that COULD be y-like based on frequencies
+#(this is --maf 3/12, or heterozygous in three males, except for reticulata, where we need to make it 4/30 = 0.12
+
+vcftools --vcf Gambusia_genome.vcf --maf 0.24 --minDP 4 --max-missing 1.0 --recode --out Gambusia_genome_maf
+vcftools --vcf latipinna_genome.vcf --maf 0.24 --minDP 4 --max-missing 1.0 --recode --out latipinna_genome_maf
+vcftools --vcf picta_genome.vcf --maf 0.24 --minDP 4 --max-missing 1.0 --recode --out picta_genome_maf
+vcftools --vcf reticulata_genome.vcf --maf 0.12 --minDP 4 --max-missing 1.0 --recode --out reticulata_genome_maf
+vcftools --vcf wingei_genome.vcf --maf 0.24 --minDP 4 --max-missing 1.0 --recode --out wingei_genome_maf
+
+
+
+
+###################################################
+#### SUBSET FOR CONFIRMING RNA VCF DEPTH WORKS ####
+###################################################
+#idea here is to confirm that using the depths from vcf variants 
+#gives same results as multicov. Take RNA vcfs and get their depths.
+mkdir rna_vcf_depths
+ln -s ../species_vcfs/*RNA.vcf .
+
+#first filter them
+>filter
+for file in *.vcf
+do echo "vcftools --vcf $file --minDP 3 --max-missing 0.5 --min-alleles 2 --max-alleles 2 --recode --out ${file/.vcf/}" >> filter
+done
+
+#then pull out the depths
+>get_depths
+for file in *RNA.recode.vcf
+do echo "parse_vcf_depths.py $file ${file/.recode.vcf/}_depths.tsv" >> get_depths
+done
+
+#then average the depths across genes
+>averageGenes
+for file in *_depths.tsv
+do echo "mean_gene_depth_tacc.py -i $file -g geneCoords.tsv -o ${file/_depths.tsv/}_depthsByGene.tsv" >> averageGenes
+done
+
+#concatenate into single dataframes
+echo "Gambusia
+latipinna
+picta
+wingei
+reticulata" > species.txt
+while read spp
+do echo "concatenate_dataframes.py -i *${spp}_RNA_depthsByGene.tsv -o depthsByGene_${spp}.tsv"
+done < species.txt
+
+#send final results to both_dna_rna/vcf_depths
+#check agreement with feature counts using compare_vcf_depths_with_featurecounts.R
+
+
+#################################################
+##### CALL PUTATIVE W- AND Y-LINKED ALLELES #####
+#################################################
+
+echo "Gambusia
+latipinna
+picta
+wingei
+reticulata" > species.txt
+
+
+#grab the assembled hwe and allele frequency files from above
+ln -s ../callXY_prep/*hwe.tsv .
+ln -s ../callXY_prep/*afs.tsv .
+
+#run call_xy.R on them
+>runCallxy
+while read spp
+do echo "call_xy.R \
+--m_prefix ${spp}_male \
+--f_prefix ${spp}_female \
+--out_prefix ${spp}_hcut8 \
+--hcut 0.8 \
+--hetgam_freq_cut 0.3 \
+--homgam_freq_cut 0.0" >>runCallxy
+done < species.txt 
+
+#output vcfs for SNP split (putative W AND Y-linked alleles for each species):
+Gambusia_w.vcf
+Gambusia_y.vcf
+latipinna_w.vcf
+latipinna_y.vcf
+picta_w.vcf
+picta_y.vcf
+reticulata_w.vcf
+reticulata_y.vcf
+wingei_w.vcf
+wingei_y.vcf
+
+#format these for SNP split by adding a header for the X. maculatus reference
+for file in *_y.vcf
+do cat Xmaculatus_vcf_header.txt $file > ${file/.vcf/}_forSNPsplit.vcf
+done
+
+for file in *_w.vcf
+do cat Xmaculatus_vcf_header.txt $file > ${file/.vcf/}_forSNPsplit.vcf
+done
+
+#####################################################
+########## SUBSET FOR SEX CHROM CALLED SNPS #########
+#####################################################
+#idea here is to get vcf with both DNA and RNA from each species
+#that include only the variants that could be called as X or Y
+#setup
+mkdir subset_xy
+ln -s ../callXY/*.vcf .
+ln -s ../species_vcfs/*genome.vcf .
+echo "Gambusia
+latipinna
+picta
+wingei
+reticulata" > species.txt
+
+
+#pull the sites
+for file in *hcut*.vcf
+do tail -n +2 $file | cut -f 1,2 > ${file/.vcf/}_sites.txt
+done
+
+
+#subset the vcfs
+>subset_xy
+while read spp
+do echo "vcftools --vcf ${spp}_genome.vcf --positions ${spp}_hcut8_y_sites.txt --recode --out ${spp}_ylikeSites" >> subset_xy
+done < species.txt
+
+#reduce these for good representation
+>finalFilt
+for file in *ylikeSites.recode.vcf
+do echo "vcftools --vcf $file --max-missing 0.75 --recode --out ${file/_ylikeSites.recode.vcf/}_ylikeFinal" >>finalFilt
+done
+
+#parse out the depths
+>get_depths
+for file in *_ylikeFinal.recode.vcf
+do echo "parse_vcf_depths.py $file ${file/_ylikeFinal.recode.vcf/}_ylikeDepths.tsv" >> get_depths
+done
+
+#don't average across genes cuz we need to include the Y-linkage info
+
+#results are *_ylikeFinal.recode.vcf and *_ylikeDepths.tsv files
+#send these and the to callXY/ for the appropriate dataset on repo
+#then examine them with explore_xy_expression.R
+
+
+
+################################################
+############# RUN PCAS ON THE VCFS #############
+################################################
+#assemble all the *filt2.vcf and *_all_*.vcf from above
+
+#run PCAs on each of them
+>runPCAs
+for file in *.vcf
+do echo "basic_snp_pca.R $file 1" >> runPCAs
+done
+
+
+#also do some PCAs for selected regions
+while read SPP
+do echo "vcftools --vcf chr8_all_${SPP}.vcf --from-bp 500000 --to-bp 5000000 --chr 8 --recode --out ${SPP}_SDR"
+done < species.txt
+
+#run pcas on those
+for file in *SDR.recode.vcf
+do echo "basic_snp_pca.R $file 1"
+done
+
+
+###############################################
+########### MALE FEMALE DIFFERENCES ###########
+###############################################
+
+
+#get chromosomes lengths
+REFERENCE_GENOME=/work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa
+REFERENCE_GENOME=/work/02260/grovesd/stampede2/Xhellerii_chrsOnly_reference/Xiphophorus_hellerii_v4.1_chrsOnly.fasta 
+fasta_sequence_characters.py -fa $REFERENCE_GENOME | head -n 24 > chrLengths.txt
+cut -f 1 chrLengths.txt > chrs.txt
+
+#RUN VCFTOOLS WINDOW WRAPPER
+
+#set species
+echo "Gambusia
+latipinna
+picta
+wingei
+reticulata" > species.txt
+
+#set window size
+w=100000
+
+#set up commands
+>runWrap
+while read spp
+do while read chr
+do vcf=chr${chr}_all_${spp}.vcf
+male_file=male_${spp}_sub.txt
+female_file=female_${spp}_sub.txt
+chrLength=$(grep -w $chr chrLengths.txt | awk '{print $2}')
+echo -e "$vcf\t$spp\t$chr\t$chrLength"
+echo "vcf_window_wrapper.py -males $male_file -females $female_file -i $vcf -chr $chr -w $w -l $chrLength" >> runWrap
+done < chrs.txt
+done < species.txt
+
+launcher_creator.py -n runWrap -j runWrap -q development -N 1 -w 24 -a $allo -e $email -t 02:00:00
+
+#assemble the results
+
+while read spp
+do echo "${spp}..."
+head -n 1 chr9_all_${spp}_w100000_s100000_RESULTS.tsv > header.txt
+cp header.txt ${spp}_100Kb_win_res.tsv
+for file in chr*all_${spp}*RESULTS.tsv
+do tail -n +2 $file >> ${spp}_100Kb_win_res.tsv
+done
+done < species.txt
+
+
+#ALSO RUN HWE ON EACH CHROMOSOME SET FOR EACH SPECIES TO GET A CHROMOSOMAL MEAN
+
+#run het
+>getHet
+while read SPP
+do for file in chr*_all_${SPP}.vcf
+do echo "vcftools --vcf $file --het --out ${file/.vcf/}">> getHet
+done
+done < species.txt
+
+#assemble results
+while read SPP
+do echo -e "INDV\tO(HOM)\tE(HOM)\tN_SITES\tF\tchr" > ${SPP}_heterozygosities.tsv
+for file in chr*_all_${SPP}.het
+do CHR=$(echo $file | awk '{split($1, a, "_"); print a[1]}')
+tail -n +2 $file | awk -v chr=$CHR '{print $0"\t"chr}' >> ${SPP}_heterozygosities.tsv
+done
+done < species.txt
+
+#send to /vcf_windows in rna/ or dna/:
+*_heterozygosities.tsv
+*_100Kb_win_res.tsv
+
+
+
+
+
+###############################################
+################## SNP SPLIT ##################
+###############################################
+
+#combine all the filt2 vcfs
+bcftools concat -o all_filt2s.vcf *filt2.vcf
+
+#run the following for each species in its own directory
+SPP=picta
+
+#------------- PREPARE GENOME ------------#
+#assemble necessary files
+cd genome_preparation/
+ln -s /work/02260/grovesd/lonestar/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.dna.toplevel.fa .
+ln -s ../../../vcftools_window_wrapper/all_filt2s.vcf .
+
+
+#set up species
+echo "reticulata
+wingei
+picta" > species.txt
+
+#set reference
+GENOME_FOLDER=/work/02260/grovesd/stampede2/Xmaculatus_reference/
+
+#N-mask the SNPs in the reference
+for file in *_forSNPsplit.vcf
+do SPP=`echo $file | awk '{split($1, a, "_");print(a[1])}'`
+STRAIN=`echo $file | awk '{split($1, a, "_");print a[1]"_"a[2]"_"a[3]}'`
+echo "my_SNPsplit_genome_preparation --vcf $file --strain $STRAIN --reference_genome $GENOME_FOLDER --genome_build X_maculatus5.0 &"
+ echo "my_SNPsplit_genome_preparation --vcf $file --strain $STRAIN --reference_genome $GENOME_FOLDER --genome_build X_maculatus5.0 &"
+done < species.txt
+
+#concatenate the N-masked references
+while read SPP
+do echo "cat ${SPP}_y_N-masked/*N-masked.fa > ${SPP}_y_N-masked/ALL_N-masked.fasta"
+done < species.txt
+
+#build bowtie indices
+module load bowtie
+>doBuilds
+while read SPP
+do echo "bowtie2-build ${SPP}_y_N-masked/ALL_N-masked.fasta ${SPP}_y_N-masked/ALL_N-masked.fasta" >>doBuilds
+done < species.txt
+
+
+#----------- REMAP READS TO N-MASKED -----------#
+
+#move the reads from each species into the N-masked folder
+#run mapping
+#eg:
+cd wingei_y_N-masked
+ln -s /scratch/02260/grovesd/mank_rebuttal/map/rna/run2/Pwin_T_*.fq .
+
+#for RNA
+module load bowtie
+module load samtools
+>mappe
+for file in *_2_RNA-Seq_catted.fq
+do runID=${file/_2_RNA-Seq_catted.fq/}
+echo "bowtie2 -x ./ALL_N-masked.fasta -1 ${runID}_1_RNA-Seq_catted.fq -2 ${runID}_2_RNA-Seq_catted.fq -p 12 | samtools sort -n -O bam -o ${runID}_sortedByName.bam" >> mappe
+done
+launcher_creator.py -n mapNreticulata -j mappe -q normal -N 5 -w 3 -a $allo -t 10:00:00 -e $email
+
+#remove duplicates
+module load samtools
+>removeDups
+for file in *_sorted.bam
+do runID=${file/_sorted.bam/}
+ echo "java -Xms4g -jar /work/02260/grovesd/lonestar/picard/picard-tools-1.119/MarkDuplicates.jar\
+ INPUT=${runID}_sorted.bam\
+ OUTPUT=${runID}_dupsRemoved.bam\
+ METRICS_FILE=${runID}_dupMetrics.txt\
+ REMOVE_DUPLICATES=true &&\
+ samtools index ${runID}_dupsRemoved.bam" >> removeDups
+ done
+
+
+#----------- RUN SPLITTING -----------#
+
+
+#grab files
+
+ln -s ../call_xy/*_y_snpfile.tsv .
+cp ../call_xy/species.txt .
+ln -s ../map/rna/dupsRemoved/*.bam* .
+
+
+#rename to match species names for easier access
+rename G.hol._ Gambusia_ G.hol._*.bam*
+rename P.lat._ latipinna_ P.lat.*.bam*
+rename P.pic._ picta_ P.pic._*.bam*
+rename Pwin_ wingei_ Pwin_*.bam*
+rename SRR reticulata_SRR SRR*.bam*
+
+#RUN SNP SPLIT FOR EACH SPECIES
+
+echo "picta
+wingei
+reticulata" > species.txt
+
+module load samtools
+
+>splitPaired
+while read SPP
+do for file in ${SPP}*sortedByName.bam
+do echo "SNPsplit --snp_file all_SNPs_${SPP}_y_X_maculatus5.0.txt --paired --singletons --no_sort $file" >> splitPaired
+done
+done < species.txt
+
+
+launcher_creator.py -n splitPaired -j splitPaired -q normal -N 3 -w 13 -a $allo -e $email -t 06:00:00
+
+
+
+#GET SUMMARY INFO
+
+#for females
+for file in *SNPsplit_report.txt
+do echo "-----------"
+echo $file
+grep "Reads were specific for genome 1" $file
+grep "Reads were specific for genome 2" $file
+done
+
+
+
+#run featurecounts for the X and Y counts
+GFF_PATH=/work/02260/grovesd/stampede2/Xmaculatus_reference/Xiphophorus_maculatus.X_maculatus-5.0-male.99.gff3
+GENE_ID="ID"
+echo "featureCounts -a $GFF_PATH -p -t gene -g $GENE_ID -o feature_counts_out.tsv -T 36 --primary *sortedByName.genome*.bam" > runFeatureCounts
+
+#also run for the unassigned
+echo "featureCounts -a $GFF_PATH -p -t gene -g $GENE_ID -o feature_counts_out.tsv -T 36 --primary *.sortedByName.unassigned.bam" > runFeatureCounts
+
+
+
+
+

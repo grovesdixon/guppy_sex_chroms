@@ -1,0 +1,15 @@
+SRR5034729	Female_01_lab_RNA	female
+SRR5034741	Female_13_lab_RNA	female
+SRR5034749	Female_07_lab_RNA	female
+SRR5034756	Female_04_lab_RNA	female
+SRR5034717	Male_17_lab_RNA	male
+SRR5034720	Male_15_lab_RNA	male
+SRR5034723	Male_18_lab_RNA	male
+SRR5034733	Male_14_lab_RNA	male
+SRR5034735	Male_06_lab_RNA	male
+SRR5034740	Male_09_lab_RNA	male
+SRR5034742	Male_08_lab_RNA	male
+SRR5034744	Male_11_lab_RNA	male
+SRR5034747	Male_02_lab_RNA	male
+SRR5034751	Male_05_lab_RNA	male
+SRR5034754	Male_12_lab_RNA	male

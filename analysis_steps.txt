@@ -1,0 +1,53 @@
+#analysis_steps.txt
+
+#complete the steps in guppy_sex_chrom_notes.txt
+
+
+#RNA-seq:
+#send all_featureCounts_geneCounts.tsv from section 'GET GENE COUNTS WITH FEATURECOUNTS' to guppy_sex_chroms/rnaseq/ in repo
+
+initialize_feature_counts.R
+	#read in and format the feature counts results and plot overview figures
+
+deseq_sex.R
+	#get sex differences within species
+	#(loading files to load and format data for M:F comparisons within species are in sex_compare_groups/)
+
+deseq_species.R
+	#get species differences within sexes
+	#(loading files to load and format data for ancestral comparisons (species:species within sexes) are in species_compare_groups/)
+
+
+#DNA:
+#send all_multicov_results.tsv from section 'FOLD COVERAGE FROM DNA' to guppy_sex_chroms/dna/fold_coverage
+	fold_coverage.R
+		#format and explore the coverage data
+ 
+ #send the *100Kb_win_res.tsv files from section ' MALE FEMALE DIFFERENCES' to guppy_sex_chroms/dna/vcf_windows
+ 	plot_vcftools_windows.R
+ 		#format and explore the vcfwindow wrapper results.
+ 
+
+#Both DNA and RNA:
+#send the *ylikeDepths.tsv and *ylikeFinal.recode.vcf files from section 'CALL PUTATIVE W- AND Y-LINKED ALLELES' to guppy_sex_chroms/both_dna_rna/callXY
+	
+#use the format_spp.R files to format the names of each species from these files (this was a pain)
+	y_like_density.R
+		#use this to explore the density of Y-like SNPS
+	explore_xy_expression.R 
+		#explore the X and Y allele coverage
+
+
+#Final figure plotting
+	plot_figure1.R
+		plot similar figures to figure 1 in Darolti et al. 2019
+	
+	plot_figure3.R
+		plot our versions of figure 3 stuff from Darolti et al. 2019
+	
+	plot_snp_pcas.R
+		plot PCAs based on the SNP data
+	
+	plot_ge_pcas.R
+		plot PCAs based on the gene expression levels
+
