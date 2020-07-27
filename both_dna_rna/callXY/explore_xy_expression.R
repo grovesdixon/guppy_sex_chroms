@@ -122,6 +122,16 @@ for (n in names(malexy_list)){
 plot_grid(plotlist = yx_dens_plts,
           nrow=3)
 
+
+
+# SNPs with zero coverage for Ys from DNA ---------------------------------
+
+w = ddat_list[[2]]
+w %>% 
+  filter(mdnaY == 0)
+
+
+
 # proportion of coverage from X -------------------------------------------
 
 #decide on female Y depth cutoff

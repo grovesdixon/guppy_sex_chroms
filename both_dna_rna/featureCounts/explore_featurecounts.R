@@ -170,10 +170,6 @@ top = plot_grid(ylab, pans, nrow=1, rel_widths = c(1,15))
 plot_grid(top, l, nrow=2, rel_heights = c(25,1))
 
 
-
-
-
-
 # use deseq to make M:F comparisons ---------------------------------------
 library(DESeq2)
 sub_counts = function(spp, assay){
@@ -329,10 +325,15 @@ picta_fcs2 = picta_fcs %>%
   rbind(pres) %>% 
   filter(!is.na(Chr))
 
-#PLOT WITH OLD RNA
+#PLOT WITH OLD RNA RESULTS
 pplt = plot_fc_boxes(picta_fcs2, 'picta')
 rplt = plot_fc_boxes(ret_fcs2, 'reticulata')
 wplt = plot_fc_boxes(wing_fcs2, 'wingei')
 plot_grid(rplt,wplt,pplt, nrow=3)
-#These seem right. Not sure why new RNAseq results are so janky
+#These look right
+
+
+# save the results for plotting selected figure ---------------------------
+
+save(ret_fcs2, wing_fcs2, picta_fcs2, file='figure_plotting/fc_boxplot_objects.Rdata')
 

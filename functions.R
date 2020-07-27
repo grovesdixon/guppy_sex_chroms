@@ -108,43 +108,74 @@ add_intervals_by_factor_two_tailed = function(dat, factor_col, value_col, sexchr
 
 
 #function to plot the sex chromosome scatterplot with 95 confidence intervals
-plot_sexchrom_scatter = function(df0, xcol, ycol, factor_col='species', sexchrom=8, ylim=FALSE,alpha=1){
+plot_sexchrom_scatter = function(df0, xcol, ycol, factor_col='species', sexchrom=8, ylim=FALSE,alpha=1, conf_ribbon=FALSE){
   df = add_intervals_by_factor(df0, factor_col, ycol)
   y = df %>% 
     pull(ycol)
+  conf_df = df %>% 
+    group_by(species) %>% 
+    summarize(upper = median(upper),
+              lower = median(lower)) #get single values for each species
   df$upper_outlier = y > df$upper
   plt = df %>% 
     filter(chr==sexchrom) %>% 
     ggplot() +
-    # geom_hline(yintercept = 0, lty=2) +
-    geom_ribbon(aes_string(x=xcol, ymin='lower', ymax='upper'),
-                fill='grey',
-                color='grey') +
+
+  #plot the rest
     geom_point(aes_string(x=xcol, y=ycol, color='upper_outlier'), alpha=alpha) +
     geom_smooth(aes_string(x=xcol, y=ycol), lwd=0.75, se=FALSE) +
     scale_color_manual(values=c('black', 'black')) +
-    theme(legend.position = 'none')
+    theme(legend.position = 'none') +
+  #confidence intervals as dotted lines
+    geom_hline(data=conf_df, aes(yintercept = upper), lwd=0.75, lty=2, color='grey75')
+
   if (length(ylim) > 1){
     plt=plt+lims(y=ylim)
   }
   return(plt)
 }
 
+
+
 #same as above but for two-tailed
-plot_sexchrom_scatter_two_tailed = function(df0, xcol, ycol, factor_col='species', sexchrom=8, ylim=FALSE,alpha=1){
+plot_sexchrom_scatter_two_tailed = function(df0, xcol, ycol, factor_col='species', 
+                                            sexchrom=8, ylim=FALSE,alpha=1, 
+                                            to_plot = c('reticulata','wingei','picta'),
+                                            reverse_x = TRUE){
   df = add_intervals_by_factor_two_tailed(df0, factor_col, ycol)
+  
+  #filter for only those we want to plot and set order
+  df = df %>% 
+    filter(species %in% to_plot) %>% 
+    mutate(species = factor(species, levels=to_plot))
   y = df %>% 
     pull(ycol)
+  conf_df = df %>% 
+    group_by(species) %>% 
+    summarize(upper = median(upper),
+              lower = median(lower)) #get single values for each species
+  conf_line_col = 'grey75'
   df$outlier = y > df$upper | y < df$lower
-  plt = df %>% 
+  #subset for sex chromosome
+  pdf = df %>% 
+    filter(chr==sexchrom) %>% 
+    data.frame()
+  #optionally reverse the x coordinates (guppy and Xiphophorus chr8 are reversed)
+  if (reverse_x){
+    pdf[,xcol] = max(pdf[,xcol]) - pdf[,xcol]
+  }
+  plt = pdf %>% 
     filter(chr==sexchrom) %>% 
     ggplot() +
-    geom_ribbon(aes_string(x=xcol, ymin='lower', ymax='upper'), fill='grey', color='grey') +
+    # geom_ribbon(aes_string(x=xcol, ymin='lower', ymax='upper'), fill='grey', color='grey') +
     # geom_hline(yintercept = 0, lty=2) +
     geom_point(aes_string(x=xcol, y=ycol, color='outlier'), alpha=alpha) +
     geom_smooth(aes_string(x=xcol, y=ycol), lwd=0.75, se=FALSE) +
     scale_color_manual(values=c('black', 'black')) +
-    theme(legend.position = 'none')
+    theme(legend.position = 'none') +
+    geom_hline(data=conf_df, aes(yintercept = upper), lwd=0.75, lty=2, color=conf_line_col) +
+    geom_hline(data=conf_df, aes(yintercept = lower), lwd=0.75, lty=2, color=conf_line_col)
+    
   if (length(ylim) > 1){
     plt=plt+lims(y=ylim)
   }
@@ -212,4 +243,34 @@ plot_rld_pca = function(df,
     g = g + coord_fixed() 
   }
   return(g)
+}
+
+
+
+
+#function to plot the sex chromosome scatterplot with 95 confidence intervals
+plot_sexchrom_scatter_ribbon = function(df0, xcol, ycol, factor_col='species', sexchrom=8, ylim=FALSE,alpha=1){
+  df = add_intervals_by_factor(df0, factor_col, ycol)
+  y = df %>% 
+    pull(ycol)
+  df$upper_outlier = y > df$upper
+  plt = df %>% 
+    filter(chr==sexchrom) %>% 
+    ggplot() +
+    # geom_hline(yintercept = 0, lty=2) +
+    
+    
+    geom_ribbon(aes_string(x=xcol, ymin='lower', ymax='upper'),
+                fill='grey',
+                color='grey') +
+    #plot the rest
+    geom_point(aes_string(x=xcol, y=ycol, color='upper_outlier'), alpha=alpha) +
+    geom_smooth(aes_string(x=xcol, y=ycol), lwd=0.75, se=FALSE) +
+    scale_color_manual(values=c('black', 'black')) +
+    theme(legend.position = 'none')
+  #confidence intervals as dotted lines
+  if (length(ylim) > 1){
+    plt=plt+lims(y=ylim)
+  }
+  return(plt)
 }

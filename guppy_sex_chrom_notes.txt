@@ -994,6 +994,8 @@ done < species.txt
 ###############################################
 ################## SNP SPLIT ##################
 ###############################################
+#DID NOT END UP USING THIS! USED ALLELE DEPTHS FROM MPILEUP INSTEAD.
+#KEPT HERE ONLY FOR REFERENCE.
 
 #combine all the filt2 vcfs
 bcftools concat -o all_filt2s.vcf *filt2.vcf

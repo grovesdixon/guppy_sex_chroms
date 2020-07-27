@@ -6,7 +6,6 @@ source('functions.R')
 
 
 #GLOBAL VARS
-bioprojectDirs
 NTOP = 10000
 FIX_COORDS = FALSE
 
@@ -14,6 +13,7 @@ FIX_COORDS = FALSE
 # LOAD THE RNA RLD DATA ---------------------------------------------------
 
 #PLOT FOR ALL SAMPLES AT ONCE
+library(DESeq2)
 ll=load('rnaseq/results_files/all_rld.Rdata')
 ll
 pca_df = build_pca(rld.df, coldata, ntop = NTOP, pcs = 2)

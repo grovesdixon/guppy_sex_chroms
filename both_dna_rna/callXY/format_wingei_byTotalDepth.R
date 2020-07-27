@@ -1,4 +1,4 @@
-
+rm(list=ls())
 library(tidyverse)
 library(cowplot)
 theme_set(theme_cowplot())

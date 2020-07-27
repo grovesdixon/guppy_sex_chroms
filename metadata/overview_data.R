@@ -89,9 +89,6 @@ sum2 %>%
             tot_Nsample = sum(Nsample))
 
 
-
-
-
 # PRINT OUT COMMANDS FOR CONCATENATING MULTIPLE FASTQS --------------------
 #based on sum1, we have many duplicate runs for individual samples
 #looking at sum2, the number of samples for all species except reticulata is 3 male and 3 female,

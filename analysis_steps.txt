@@ -42,8 +42,8 @@ deseq_species.R
 	plot_figure1.R
 		plot similar figures to figure 1 in Darolti et al. 2019
 	
-	plot_figure3.R
-		plot our versions of figure 3 stuff from Darolti et al. 2019
+	plot_figure2.R
+		similar stuff to figure 3 from Darolti et al. 2019
 	
 	plot_snp_pcas.R
 		plot PCAs based on the SNP data
