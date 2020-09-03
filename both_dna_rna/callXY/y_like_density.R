@@ -58,9 +58,74 @@ get_ylike_density = function(dat, window_size, chr_lengths){
   return(res)
 }
 
+
+
+# compare the y-like density between chromes ------------------------------
+
 #load chr lengths for making bins
 ll = load('metadata/maculatus_chr_lengths.Rdata')
 ll
+
+#make df for merging
+cdat = data.frame(chr_lengths) %>% 
+  rownames_to_column('chr') %>% 
+  mutate(chr = as.numeric(chr))
+
+#build a barplot
+total_dens_list = list()
+for (ispp in names(vdat_list)){
+  vdat = vdat_list[[ispp]]
+  ddat = vdat %>% 
+    group_by(chr) %>% 
+    summarize(n_ylike = n()) %>% 
+    left_join(cdat, by = 'chr') %>% 
+    mutate(density = n_ylike / chr_lengths,
+           species = ispp)
+  total_dens_list[[ispp]] = ddat
+}
+total_dens_df = purrr::reduce(total_dens_list, rbind)
+
+selection = c('reticulata', 'wingei', 'picta')
+total_dens_df %>% 
+  filter(species %in% selection) %>% 
+  mutate(sex = if_else(chr == 8,
+                       'sex',
+                       'autosome'),
+         species = factor(species, levels=selection),
+         chr = factor(chr, levels = 1:24)) %>% 
+  ggplot(aes(x = chr, y=density, fill = sex)) +
+  geom_bar(stat='identity') +
+    labs(fill='') +
+  facet_wrap(~species, scales = 'free_y', nrow=3)
+
+
+
+# build alternative to barplot that's just sex vs autosomes ---------------
+
+#boxplots
+total_dens_df$species[total_dens_df$species=='reticulata'] <- 'P. reticulata'
+total_dens_df$species[total_dens_df$species=='wingei'] <- 'P. wingei'
+total_dens_df$species[total_dens_df$species=='picta'] <- 'P. picta'
+total_dens_df %>% 
+  filter(species %in% c('P. reticulata', 'P. wingei', 'P. picta')) %>% 
+  mutate(sex_chrom = if_else(chr==8,
+         'sex',
+         'auto'),
+         species = factor(species, levels = c('P. reticulata', 'P. wingei', 'P. picta')),
+         sex_chrom = factor(sex_chrom, levels=c('auto', 'sex'))) %>% 
+  ggplot(aes(x=sex_chrom, y = density, color=sex_chrom)) +
+  geom_boxplot() +
+  labs(x='chromosome') +
+  scale_color_manual(values=c('grey50', 'black')) +
+  facet_wrap(~species, scales = 'free') +
+  theme(strip.text = element_text(face = 'italic'))
+  
+
+
+  
+
+
+# look at windows ---------------------------------------------------------
 
 #set window size
 window_size = 1e4 #10Kb
@@ -91,7 +156,9 @@ w = ydens_dat %>%
 hist(w$starts)
 
 
-#save
+
+# save restuls ------------------------------------------------------------
+
 out_path = paste('both_dna_rna/callXY/', output_name, sep='')
 print(out_path)
 save(ydens_dat, file=paste('both_dna_rna/callXY/', output_name, sep=''))

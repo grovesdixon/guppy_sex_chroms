@@ -5,6 +5,7 @@ species_names
 
 ALPHA = 0.75
 
+
 # LOAD FOLD COVERAGE DATA -------------------------------------------------
 #build this with dna/fold_coverage.R
 
@@ -77,18 +78,27 @@ ge_res = ge_res %>%
 cov_plt = fold_dat %>% 
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='ratio', alpha=ALPHA) +
   coord_cartesian(y=c(-1,1)) +
-  facet_wrap(~species, nrow=length(species_names))
+  facet_wrap(~species, nrow=1)
 
 # PLOT Y-LIKE DENSITY -----------------------------------------------------
 
 #old one-tailed version
 # ydens_plt = ydens_dat %>% 
 #   plot_sexchrom_scatter(xcol='mb', ycol='ylike_density', ylim=c(0,0.0015), alpha=ALPHA) +
-#   facet_wrap(~species, nrow=length(species_names))
+#   facet_wrap(~species, nrow=1)
 
 ydens_plt = ydens_dat %>% 
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='ylike_density', ylim=c(0,0.0015), alpha=ALPHA) +
-  facet_wrap(~species, nrow=length(species_names))
+  facet_wrap(~species, nrow=1)
+
+
+ydens_dat %>% 
+  mutate(species = factor(as.character(species),
+                          levels=c('wingei','picta', 'latipinna', 'Gambusia'))) %>% 
+  plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='ylike_density', ylim=c(0,0.0015), alpha=ALPHA, to_plot = c('Gambusia')) +
+  facet_wrap(~species, nrow=4) +
+  labs(y='W-like density')
+
 
 
 # PLOT W-LIKE DENSITY -----------------------------------------------------
@@ -110,6 +120,14 @@ wdens_plt = wdens_dat %>%
   labs(y='W-like density')
 
 
+#look at W-like region in Gambusia
+wdens_dat %>% 
+  mutate(species = factor(as.character(species),
+                          levels=c('wingei','picta', 'latipinna', 'Gambusia'))) %>% 
+  plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='ylike_density', ylim=c(0,0.0015), alpha=ALPHA, to_plot = c('Gambusia')) +
+  facet_wrap(~species, nrow=4) +
+  labs(y='W-like density')
+
 
 # DIFFERENTIAL EXPRESSION -------------------------------------------------
 
@@ -118,13 +136,13 @@ ge_plt=ge_res %>%
   plot_sexchrom_scatter(xcol='mb', ycol='abslog2') +
   labs(y=bquote('absolute log'[2]~'M:F fold change')) +
   theme(axis.title.x = element_blank()) +
-  facet_wrap(~species, nrow=length(species_names))
+  facet_wrap(~species, nrow=1)
 
 #differential expression
 ge_plt = ge_res %>% 
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='log2FoldChange', alpha=ALPHA) +
   labs(y=bquote('absolute log'[2]~'M:F fold change')) +
-  facet_wrap(~species, nrow=length(species_names))
+  facet_wrap(~species, nrow=1)
 
 
 # VCF_WRAPPER COLUMN -------------------------------------------------------------
@@ -135,13 +153,13 @@ snp_dens_ratio = vcf_dat %>%
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='mf_snpCount_ratio',alpha=ALPHA) +
   labs(x='position (Mb)',
        y=bquote(log[2]~'M:F SNP density ratio')) +
-  facet_wrap(~species, nrow=length(species_names)) 
+  facet_wrap(~species, nrow=1) 
 
 
 #proportion male specific
 vcf_dat %>% 
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='pMaleSpecific', ylim=c(0,0.1)) +
-  facet_wrap(~species, nrow=length(species_names)) +
+  facet_wrap(~species, nrow=1) +
   labs(y='proportion male-specific alleles')
 
 
@@ -150,7 +168,7 @@ female_specific = vcf_dat %>%
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='pFemaleSpecific', ylim=c(0,0.1), alpha=ALPHA) +
   labs(x='position (Mb)',
        y='proportion female-specific alleles') +
-  facet_wrap(~species, nrow=length(species_names)) 
+  facet_wrap(~species, nrow=1) 
 
 
 #mean FST
@@ -158,13 +176,13 @@ fst_plt = vcf_dat %>%
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='MEAN_FST', alpha=ALPHA) +
   labs(x='position (Mb)',
        y=bquote(mean~F[ST])) +
-  facet_wrap(~species, nrow=length(species_names))
+  facet_wrap(~species, nrow=1)
 
 
 #Smale:female PI ratio
 vcf_dat %>% 
   plot_sexchrom_scatter(xcol='mb', ycol='mf_pi_ratio') +
-  facet_wrap(~species, nrow=length(species_names))
+  facet_wrap(~species, nrow=1)
   
 # ASSEMBLE COPY OF FIGURE 1 -----------------------------------------------
 
@@ -176,31 +194,47 @@ plt_list = list(cov_plt,
                 fst_plt,
                 ge_plt)
 
-title_list = list('Read\ndepth\nratio',
-               'SNP\ndensity\nratio',
-                    'SDR-like\nSNP\ndensity',
-                    'Female-\nspecific\nallele density',
-                    '\nFST\n',
-                    'Expression\nratio\n')
+# title_list = list('Read\ndepth\nratio',
+#                'SNP\ndensity\nratio',
+#                     'SDR-like\nSNP\ndensity',
+#                     'Female-\nspecific\nallele density',
+#                     bquote('\nFST\n',
+#                     'Expression\nratio\n')
+ylab_text = list('Read\ndepth\nratio',
+                  'SNP\ndensity\nratio',
+                  'SDR-like\nSNP\ndensity',
+                  'Female-\nspecific\ndensity',
+                  bquote(atop(atop('',''), F[ST])),
+                 'Expression\nratio\n')
+
 
 #make modifications to the list for final plot
 mod_plt_list = list()
 for (i in 1:length(plt_list)){
-  t = title_list[[i]]
   p = plt_list[[i]]
-  mp = p + labs(title = t) +
+  mp = p + labs(y = t) +
     theme(axis.title.x = element_blank(),
-    axis.title.y = element_blank(),
+          axis.title.y = element_blank(),
     strip.background = element_blank(),
     strip.text.x = element_blank(),
-    plot.title = element_text(hjust = 0.5,
-                              vjust = 0.5,
-                              face = 'plain'))
+    plot.title = element_blank()) +
+    scale_y_continuous(labels = function(x) format(x, scientific = TRUE))
   mod_plt_list[[i]] = mp
 }
-pans = plot_grid(plotlist = mod_plt_list, nrow=1)
-xlab = ggdraw() + draw_label('position (Mb)')
-plot_grid(pans, xlab, nrow=2, rel_heights = c(20,1))
+pans = plot_grid(plotlist = mod_plt_list, nrow=length(mod_plt_list),
+                 align = 'v',
+                 axis = 'l')
+draw_ylab = function(x){
+  ggdraw() + draw_label(x, vjust = 0.5, size=13)
+}
+spp_list = c("P. reticulata", "P. wingei", "P. picta")
+
+
+ylab_list = map(ylab_text, function(x) draw_ylab(x))
+ylab_list[[5]] = ggdraw() + draw_label(bquote(atop(atop('',''), F[ST])), vjust = 0)
+ylabs = plot_grid(plotlist = ylab_list, nrow=length(ylab_list))
+top = plot_grid(ylabs, pans, nrow=1, rel_widths = c(1,5))
+top
 
 
 # assign the SDR boundaries -----------------------------------------------
@@ -216,14 +250,14 @@ rev_SDR_start = max_chr8 - SDR_start
 #rev
 ydens_dat %>% 
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='ylike_density', ylim=c(0,0.0015), alpha=ALPHA) +
-  facet_wrap(~species, nrow=length(species_names)) +
+  facet_wrap(~species, nrow=1) +
   geom_vline(xintercept = rev_SDR_start)
 
 #rev
 fold_dat %>% 
   plot_sexchrom_scatter_two_tailed(xcol='mb', ycol='ratio', alpha=ALPHA) +
   coord_cartesian(y=c(-1,1)) +
-  facet_wrap(~species, nrow=length(species_names)) +
+  facet_wrap(~species, nrow=1) +
   geom_vline(xintercept = rev_SDR_start)
 
 save(SDR_start, rev_SDR_start, file='figure_plotting/sdr_start.Rdata')
@@ -258,7 +292,7 @@ msw = vcf_dat %>%
   plot_sexchrom_scatter(xcol='mb', ycol='pMaleSpecific') +
   labs(x='position (Mb)',
        y='male-specific SNPs') +
-  facet_wrap(~species, nrow=length(species_names)) 
+  facet_wrap(~species, nrow=1) 
 
 #plot female-specific snps
 fsw = vcf_dat %>% 
@@ -268,7 +302,7 @@ fsw = vcf_dat %>%
   plot_sexchrom_scatter(xcol='mb', ycol='pFemaleSpecific') +
   labs(x='position (Mb)',
        y='female-specific SNPs') +
-  facet_wrap(~species, nrow=length(species_names)) 
+  facet_wrap(~species, nrow=1) 
 
 #plot ratio
 ratiow = vcf_dat %>% 
@@ -278,7 +312,7 @@ ratiow = vcf_dat %>%
   plot_sexchrom_scatter(xcol='mb', ycol='mf_snpCount_ratio') +
   labs(x='position (Mb)',
        y=bquote('M:F SNP density')) +
-  facet_wrap(~species, nrow=length(species_names)) 
+  facet_wrap(~species, nrow=1) 
 
 
 #assemble

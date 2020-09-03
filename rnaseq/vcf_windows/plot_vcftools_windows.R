@@ -98,9 +98,13 @@ plot_sex_diff_col = function(df, col_to_plot, CHR=8, YLIM=FALSE){
 
 CHR=8
 plot_sex_diff_col(dat, 'N_VARIANTS', CHR=CHR)
-plot_sex_diff_col(dat, 'pMaleSpecific', CHR=CHR, YLIM=c(0,0.08))
+plot_sex_diff_col(dat, 'pMaleSpecific', CHR=CHR, YLIM=c(0,0.08)) + 
+  labs(x='Position (Mb)', y='Proportion male-specific alleles') +
+  theme(legend.position = 'none')
 plot_sex_diff_col(dat, 'pFemaleSpecific', CHR=CHR, YLIM=c(0,0.08))
-plot_sex_diff_col(dat, 'MEAN_FST', CHR=CHR)
+plot_sex_diff_col(dat, 'MEAN_FST', CHR=CHR) + 
+  labs(x='Position (Mb)', y=bquote("Mean F"[ST])) +
+  theme(legend.position = 'none')
 plot_sex_diff_col(dat, 'meanDiffA1', CHR=CHR)
 plot_sex_diff_col(dat, 'mf_pi_ratio', CHR=CHR)
 plot_sex_diff_col(dat, 'mf_snpCount_ratio', CHR=CHR)

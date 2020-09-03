@@ -122,8 +122,6 @@ full = plot_grid(lplt, top, nrow=2, rel_heights = c(1,20))
 full
 
 
-
-
 # breakdown picta and wingei by SDR ---------------------------------------
 
 #load eyeballed start positions for SDR 
@@ -133,14 +131,20 @@ SDR_start #in Mb
 rev_SDR_start #in Mb (for when coodinates are reversed)
 
 #function to plot boxplots for SDR and PAR
-plot_fc_boxes_par_sdr = function(fc_dat, spp){
+
+assign_par_sdr = function(fc_dat){
   fc_dat %>% 
     mutate(sex_chrom = if_else((Chr==8) & Start/1e6 < SDR_start,
                                'PAR',
                                'auto'),
            sex_chrom = if_else((Chr==8) & Start/1e6 > SDR_start,
                                'SDR',
-                               sex_chrom)) %>% 
+                               sex_chrom))
+}
+
+plot_fc_boxes_par_sdr = function(fc_dat, spp){
+  fc_dat = assign_par_sdr(fc_dat)
+  fc_dat %>% 
     ggplot(aes(x=sex_chrom, y=log2FoldChange, fill=source)) +
     geom_boxplot() +
     geom_hline(yintercept = 0, lty=2) +
@@ -169,3 +173,69 @@ top = plot_grid(ylab, pans, nrow=1, rel_widths = c(1,20))
 full = plot_grid(lplt, top, nrow=2, rel_heights = c(1,20))
 full
 
+
+
+# run stats ---------------------------------------------------------------
+
+#COMPARE RNA VS DNA WITHIN EACH
+
+#function to run t.test
+run_ttest = function(fc_dat, region){
+  fc_dat = assign_par_sdr(fc_dat) %>% 
+    filter(sex_chrom==region)
+  t.test(fc_dat$log2FoldChange ~ fc_dat$source)
+}
+
+#t.tests for reticulata
+run_ttest(ret_fcs2, 'auto')
+run_ttest(ret_fcs2, 'SDR')
+run_ttest(ret_fcs2, 'PAR')
+
+#t.tests for wingei
+run_ttest(wing_fcs2, 'auto')
+run_ttest(wing_fcs2, 'SDR')
+run_ttest(wing_fcs2, 'PAR')
+
+#t.tests for picta
+run_ttest(ret_fcs2, 'auto')
+run_ttest(picta_fcs2, 'SDR')
+run_ttest(picta_fcs2, 'PAR')
+
+#COMPARE RNA - DNA IN PICTA VS WINGEI
+
+#get RNA and DNA differences for wingei and picta
+w3 = wing_fcs2 %>% 
+  assign_par_sdr() %>% 
+  dplyr::select(Geneid, log2FoldChange, source, sex_chrom) %>% 
+  pivot_wider(names_from = source,
+              values_from = log2FoldChange) %>% 
+  mutate(w.diff = RNA - DNA)
+
+p3 = picta_fcs2 %>% 
+  assign_par_sdr() %>% 
+  dplyr::select(Geneid, log2FoldChange, source, sex_chrom) %>% 
+  pivot_wider(names_from = source,
+              values_from = log2FoldChange) %>% 
+  mutate(p.diff = RNA - DNA)
+
+#merge into single df
+ddat = w3 %>% 
+  left_join(p3, by = c('Geneid', 'sex_chrom'))
+
+
+#isolate sex chrom regions
+aut_dat = ddat %>% 
+  filter(sex_chrom=='auto')
+par_dat = ddat %>% 
+  filter(sex_chrom=='PAR')
+
+sdr_dat = ddat %>% 
+  filter(sex_chrom=='SDR')
+
+#run paired t-tests
+t.test(x=aut_dat$p.diff, y=aut_dat$w.diff, paired = TRUE, alternative = 'greater')
+t.test(x=par_dat$p.diff, y=par_dat$w.diff, paired = TRUE, alternative = 'greater')
+t.test(x=sdr_dat$p.diff, y=sdr_dat$w.diff, paired = TRUE, alternative = 'greater')
+
+
+  

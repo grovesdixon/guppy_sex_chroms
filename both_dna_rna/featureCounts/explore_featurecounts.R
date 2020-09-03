@@ -28,8 +28,24 @@ for (i in infiles){
 map(raw_datlist, ncol)
 full_dat = purrr::reduce(raw_datlist, rbind) %>% 
   as_tibble
-head(full_dat
+head(full_dat)
 save(full_dat, file='both_dna_rna/full_featurecounts.Rdata')
+
+#check totals
+samples = colnames(full_dat)[7:ncol(full_dat)]
+spp = sapply(samples, function(x) strsplit(x, '_')[[1]][1])
+sex = grepl('Female', sapply(samples, function(x) strsplit(x, '_')[[1]][2]))
+sex[sex == TRUE]<-'Female'
+sex[sex==FALSE]<-'Male'
+molec = grepl('_DNA', samples)
+molec[molec == TRUE]<-'DNA'
+molec[molec==FALSE]<-'RNA'
+spp_sex = paste(spp, sex, sep = '_')
+spp_sex_molec = paste(spp_sex, molec)
+table(spp)
+table(sex)
+table(spp_sex)
+table(spp_sex_molec)
 
 # convert to cpm ---------------------------------------------------------
 

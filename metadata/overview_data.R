@@ -9,7 +9,7 @@ rm(list=ls())
 
 #PRJNA528814
 sra1 = read_tsv('metadata/PRJNA528814_SraRunTable.txt') %>% 
-  select(BioSample,
+  dplyr::select(BioSample,
          Assay_Type,
          Organism,
          Run,
@@ -22,9 +22,9 @@ sra1 = read_tsv('metadata/PRJNA528814_SraRunTable.txt') %>%
 #PRJNA353986
 sra2 = read_tsv('metadata/PRJNA353986_SraRunTable.txt') %>% 
   mutate(individual = 'none') %>% 
-  rename(Assay_Type=`Assay Type`,
+  dplyr::rename(Assay_Type=`Assay Type`,
          Sample_Name = `Sample Name`) %>% 
-  select(BioSample,
+  dplyr::select(BioSample,
          Assay_Type,
          Organism,
          Run,

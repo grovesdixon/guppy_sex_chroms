@@ -23,7 +23,7 @@ deseq_species.R
 	fold_coverage.R
 		#format and explore the coverage data
  
- #send the *100Kb_win_res.tsv files from section ' MALE FEMALE DIFFERENCES' to guppy_sex_chroms/dna/vcf_windows
+ #send the *100Kb_win_res.tsv files from section 'MALE FEMALE DIFFERENCES' to guppy_sex_chroms/dna/vcf_windows
  	plot_vcftools_windows.R
  		#format and explore the vcfwindow wrapper results.
  
