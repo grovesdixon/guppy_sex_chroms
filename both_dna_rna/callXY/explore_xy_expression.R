@@ -1,5 +1,5 @@
 #explore_xy_expression.R
-#for more thorough exploration see explore_xy_expression_v0.R
+#for some messier, more in depth explorations see explore_xy_expression_v0.R
 
 rm(list=ls())
 library(tidyverse)
@@ -12,6 +12,7 @@ species = c('reticulata',
             'picta')
 
 
+#function to load results from the format_spp_byTotalDepth.R scripts
 load_ddat = function(select_spp){
   print(select_spp)
   infile = paste('both_dna_rna/callXY/', select_spp, '_ddatByDepth.Rdata', sep='')
@@ -19,12 +20,17 @@ load_ddat = function(select_spp){
   return(ddat2)
 }
 
+#apply the function
 ddat_list = map(species, load_ddat)
 names(ddat_list) = species
+map(ddat_list, head)
+names(ddat_list)
 
-
+#now we have the SDR-like SNPs in a dataframe for each species
 
 # total DNA depth ---------------------------------------------------------
+#here we are looking at the total depth based on the summed allele depths
+#this is largely to confirm the lower DNA depth results seen previously for P. picta males indicated degeration of Y
 
 #check accross chroms
 get_total_dna = function(dat){
@@ -82,7 +88,7 @@ plot_grid(plotlist = td_plt_list,
 
 
 # Y to X ratio in males ---------------------------------------------------
-
+#now get the ratio of Y-allele depth and X-allele depth in males
 
 get_male_xy = function(dat){
   malexy = dat %>% 
@@ -125,6 +131,8 @@ plot_grid(plotlist = yx_dens_plts,
 
 
 # SNPs with zero coverage for Ys from DNA ---------------------------------
+#this is strange. There are aparently about 100 loci where 
+#males were genotyped as heterozygous with allele depths of zero.
 
 w = ddat_list[[2]]
 w %>% 
