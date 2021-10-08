@@ -178,6 +178,21 @@ fst_plt = vcf_dat %>%
        y=bquote(mean~F[ST])) +
   facet_wrap(~species, nrow=1)
 
+#max fst in reticulata
+vcf_dat %>% 
+  filter(species == 'reticulata') %>% 
+  pull(MEAN_FST) %>% 
+  max()
+
+#get max smoothed
+ret_fst = vcf_dat %>% 
+  filter(species == 'reticulata')
+loessMod10 <- loess(MEAN_FST ~ mb, data=ret_fst, span=0.10) # 10% smoothing span
+ret_fst$pred = predict(loessMod10) 
+ret_fst %>% 
+  ggplot(aes(x=mb, y=pred)) +
+  geom_line()
+max(ret_fst$pred)
 
 #Smale:female PI ratio
 vcf_dat %>% 

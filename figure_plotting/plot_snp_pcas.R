@@ -1,4 +1,8 @@
 
+library(tidyverse)
+library(cowplot)
+theme_set(theme_cowplot())
+rm(list=ls())
 
 #choose pca files to input
 pattern = 'filt2.vcf'

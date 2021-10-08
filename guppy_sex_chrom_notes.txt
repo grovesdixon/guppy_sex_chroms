@@ -104,7 +104,7 @@ sbatch cat_guppy_trim_files.txt.slurm
 #after running the concatenation commands
 #double-checked these against outputs at top of metadata/overview_data.R
 ls *catted.fq | wc -l
-	#182 total files = 
+	#182 total files 
 
 ll *RNA-Seq*.fq | wc -l
 	#78 RNA-seq files = 39 RNA samples x 2 concatenated PE files per
